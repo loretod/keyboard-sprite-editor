@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Keyboard Sprite Editor — for MakeCode Arcade</title>
+<style>
+  :root{
+    --bg: #14161f;
+    --panel: #1b1e2b;
+    --panel-active: #123645;
+    --panel-border: #33374a;
+    --text: #f2f0e6;
+    --text-muted: #9a9fb5;
+    --teal: #249ca3;
+    --teal-bright: #3fc6cd;
+    --yellow: #fff609;
+    --red: #ff2121;
+    font-size: 16px;
+  }
+
+  * { box-sizing: border-box; }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ transition: none !important; animation: none !important; }
+  }
+
+  body{
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.5;
+  }
+
+  .app{
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 28px 20px 60px;
+  }
+
+  header h1{
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 1.5rem;
+    letter-spacing: 0.5px;
+    margin: 0 0 6px;
+    color: var(--text);
+  }
+  header p{
+    margin: 0 0 4px;
+    color: var(--text-muted);
+    max-width: 60ch;
+  }
+
+  .panel{
+    background: var(--panel);
+    border: 3px solid var(--panel-border);
+    padding: 18px 20px;
+    margin-top: 22px;
+  }
+
+  .panel h2{
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--teal-bright);
+    margin: 0 0 14px;
+  }
+
+  /* Active section = whichever panel currently contains focus.
+     Background swap is >7:1 contrast with --text (checked below);
+     border + badge give a non-color-dependent cue too. */
+  .panel:focus-within{
+    background: var(--panel-active);
+    border-color: var(--teal-bright);
+  }
+  .active-badge{
+    display: none;
+    color: var(--yellow);
+    font-weight: 600;
+    letter-spacing: normal;
+    text-transform: none;
+    margin-left: 8px;
+    font-size: 0.85em;
+  }
+  .panel:focus-within .active-badge{ display: inline; }
+
+  /* ---- generic radio-group buttons (size + color) share look ---- */
+  button{
+    font-family: inherit;
+    color: var(--text);
+    cursor: pointer;
+  }
+  button:focus-visible,
+  .grid-canvas:focus-visible{
+    outline: 3px solid var(--yellow);
+    outline-offset: 2px;
+  }
+
+  .choice-row{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .choice-btn{
+    background: #23273a;
+    border: 2px solid var(--panel-border);
+    padding: 10px 16px;
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+  .choice-btn[aria-checked="true"]{
+    background: var(--teal);
+    border-color: var(--teal-bright);
+    color: #08191a;
+  }
+  .size-note{
+    margin: 10px 0 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+
+  /* ---- color palette ---- */
+  .palette{
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 8px;
+  }
+  @media (max-width: 480px){
+    .palette{ grid-template-columns: repeat(4, 1fr); }
+  }
+  .swatch{
+    background: #23273a;
+    border: 2px solid var(--panel-border);
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .swatch[aria-checked="true"]{
+    border-color: var(--yellow);
+    border-width: 3px;
+    padding: 5px;
+  }
+  .swatch-color{
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border: 1px solid rgba(0,0,0,0.4);
+  }
+  .swatch-num{
+    font-family: ui-monospace, monospace;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+  .checker{
+    background-color: #ffffff;
+    background-image:
+      linear-gradient(45deg, #b9b9b9 25%, transparent 25%),
+      linear-gradient(-45deg, #b9b9b9 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #b9b9b9 75%),
+      linear-gradient(-45deg, transparent 75%, #b9b9b9 75%);
+    background-size: 8px 8px;
+    background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
+  }
+  .active-color-readout{
+    margin-top: 12px;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+  .active-color-readout strong{ color: var(--text); }
+
+  /* ---- drawing area ---- */
+  .console-bezel{
+    background: #0b0c12;
+    border: 3px solid var(--panel-border);
+    padding: 14px;
+    display: inline-block;
+    max-width: 100%;
+    overflow: auto;
+  }
+  .grid-canvas{
+    display: block;
+    image-rendering: pixelated;
+  }
+  .legend{
+    margin: 14px 0 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  kbd{
+    background: #2a2e42;
+    border: 1px solid var(--panel-border);
+    border-bottom-width: 2px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-family: ui-monospace, monospace;
+    font-size: 0.8rem;
+    color: var(--text);
+  }
+  .legend ul{ margin: 8px 0 0; padding-left: 20px; }
+  .legend li{ margin-bottom: 4px; }
+
+  .action-row{
+    margin-top: 16px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .btn-primary, .btn-secondary{
+    border: 2px solid var(--teal-bright);
+    background: var(--teal);
+    color: #08191a;
+    font-weight: 700;
+    padding: 10px 18px;
+    font-size: 0.95rem;
+  }
+  .btn-secondary{
+    background: transparent;
+    color: var(--text);
+    border-color: var(--panel-border);
+    font-weight: 600;
+  }
+
+  textarea#output{
+    width: 100%;
+    margin-top: 14px;
+    min-height: 140px;
+    background: #0b0c12;
+    color: #b9f7ee;
+    border: 2px solid var(--panel-border);
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 0.85rem;
+    padding: 10px;
+    resize: vertical;
+  }
+  #copy-status{
+    min-height: 1.2em;
+    margin-top: 8px;
+    font-size: 0.9rem;
+    color: var(--yellow);
+  }
+
+  .site-footer{
+    margin-top: 32px;
+    padding-top: 18px;
+    border-top: 1px solid var(--panel-border);
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  .site-footer a{
+    color: var(--teal-bright);
+  }
+  .site-footer a:focus-visible{
+    outline: 3px solid var(--yellow);
+    outline-offset: 2px;
+  }
+  .site-footer .disclaimer{
+    margin-top: 8px;
+  }
+
+  .sr-only{
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    white-space: nowrap;
+    border: 0;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <h1>Keyboard Sprite Editor</h1>
+    <p>A keyboard-only pixel editor for MakeCode Arcade sprites and backgrounds. Every action — moving around the grid, choosing a color, painting a cell — works without a mouse.</p>
+    <p>Press <kbd>1</kbd>–<kbd>4</kbd> anywhere on the page to jump straight to a section: <kbd>1</kbd> canvas size, <kbd>2</kbd> active color, <kbd>3</kbd> draw, <kbd>4</kbd> export.</p>
+  </header>
+
+  <section class="panel" id="panel-size" aria-labelledby="size-heading">
+    <h2 id="size-heading">1 · Canvas size<span class="active-badge">— Active</span></h2>
+    <div class="choice-row" role="radiogroup" id="size-group" aria-label="Canvas size">
+      <button type="button" class="choice-btn" role="radio" data-size="s16" aria-checked="true">16 × 16</button>
+      <button type="button" class="choice-btn" role="radio" data-size="s32" aria-checked="false">32 × 32</button>
+      <button type="button" class="choice-btn" role="radio" data-size="s48" aria-checked="false">48 × 48</button>
+      <button type="button" class="choice-btn" role="radio" data-size="s24x16" aria-checked="false">24 × 16</button>
+      <button type="button" class="choice-btn" role="radio" data-size="s16x24" aria-checked="false">16 × 24</button>
+      <button type="button" class="choice-btn" role="radio" data-size="background" aria-checked="false">Background (160 × 120)</button>
+    </div>
+    <p class="size-note">Switching size clears the canvas. 16×16, 32×32, 48×48, 24×16, and 16×24 match existing MakeCode Arcade gallery sprite dimensions; 160 × 120 matches the real screen resolution.</p>
+  </section>
+
+  <section class="panel" id="panel-color" aria-labelledby="color-heading">
+    <h2 id="color-heading">2 · Active color<span class="active-badge">— Active</span></h2>
+    <div class="palette" role="radiogroup" id="palette" aria-label="Active color"></div>
+    <p class="active-color-readout">Active color: <strong id="active-color-name">White</strong> (index <strong id="active-color-index">1</strong>)</p>
+  </section>
+
+  <section class="panel" id="panel-draw" aria-labelledby="draw-heading">
+    <h2 id="draw-heading">3 · Draw<span class="active-badge">— Active</span></h2>
+    <div class="console-bezel">
+      <canvas class="grid-canvas" id="grid-canvas" tabindex="0" role="application"></canvas>
+    </div>
+    <div id="live-region" class="sr-only" aria-live="polite"></div>
+
+    <p class="legend">
+      <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> move one cell &nbsp;·&nbsp;
+      <kbd>Shift</kbd>+arrow move five cells
+    </p>
+    <ul class="legend">
+      <li><kbd>Space</kbd> or <kbd>Enter</kbd> — paint the current cell with the active color</li>
+      <li><kbd>Backspace</kbd> or <kbd>Delete</kbd> — erase the current cell (make it transparent)</li>
+      <li><kbd>Home</kbd> / <kbd>End</kbd> — jump to the start / end of the current row</li>
+      <li><kbd>Ctrl</kbd>+<kbd>Home</kbd> / <kbd>Ctrl</kbd>+<kbd>End</kbd> — jump to the top-left / bottom-right corner</li>
+    </ul>
+
+    <div class="action-row">
+      <button type="button" class="btn-secondary" id="clear-btn">Clear canvas</button>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-export" aria-labelledby="export-heading">
+    <h2 id="export-heading">4 · Export to MakeCode<span class="active-badge">— Active</span></h2>
+    <p style="color:var(--text-muted); margin-top:0;">Generates an <code>img\`...\`</code> literal. Paste it over the image inside a sprite's <code>img\`...\`</code> in the MakeCode JavaScript editor.</p>
+    <div class="action-row">
+      <button type="button" class="btn-primary" id="copy-btn">Copy MakeCode code</button>
+    </div>
+    <div id="copy-status" role="status"></div>
+    <label for="output" class="sr-only">Generated MakeCode image code</label>
+    <textarea id="output" readonly spellcheck="false"></textarea>
+  </section>
+
+  <div id="section-status" class="sr-only" aria-live="polite"></div>
+
+  <footer class="site-footer">
+    <p><a href="https://github.com/PLACEHOLDER-ORG/PLACEHOLDER-REPO" target="_blank" rel="noopener noreferrer">View source on GitHub</a> <em>(placeholder link — to be updated once the repo is live)</em></p>
+    <p class="disclaimer">This tool was generated with the assistance of Claude, Anthropic's AI model. It has not been independently audited — please review and test it before relying on it for classroom or production use.</p>
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // Verified against microsoft/pxt-arcade: libs/device/pxt.json ("palette" + "screenSize")
+  var PALETTE = [
+    { hex:'#000000', name:'Transparent', transparent:true },
+    { hex:'#ffffff', name:'White' },
+    { hex:'#ff2121', name:'Red' },
+    { hex:'#ff93c4', name:'Pink' },
+    { hex:'#ff8135', name:'Orange' },
+    { hex:'#fff609', name:'Yellow' },
+    { hex:'#249ca3', name:'Teal' },
+    { hex:'#78dc52', name:'Green' },
+    { hex:'#003fad', name:'Blue' },
+    { hex:'#87f2ff', name:'Light blue' },
+    { hex:'#8e2ec4', name:'Purple' },
+    { hex:'#a4839f', name:'Light purple' },
+    { hex:'#5c406c', name:'Dark purple' },
+    { hex:'#e5cdc4', name:'Tan' },
+    { hex:'#91463d', name:'Brown' },
+    { hex:'#000000', name:'Black' }
+  ];
+  var HEX_CHARS = '0123456789abcdef';
+
+  var SIZE_CONFIGS = {
+    s16:        { w:16,  h:16,  cell:24, label:'16 × 16' },
+    s32:        { w:32,  h:32,  cell:12, label:'32 × 32' },
+    s48:        { w:48,  h:48,  cell:8,  label:'48 × 48' },
+    s24x16:     { w:24,  h:16,  cell:16, label:'24 × 16' },
+    s16x24:     { w:16,  h:24,  cell:16, label:'16 × 24' },
+    background: { w:160, h:120, cell:4,  label:'Background 160 × 120' }
+  };
+
+  // ---- state ----
+  var gridW, gridH, cellSize, cells;
+  var cursorR = 0, cursorC = 0;
+  var activeColor = 1;
+
+  // ---- elements ----
+  var canvas = document.getElementById('grid-canvas');
+  var ctx = canvas.getContext('2d');
+  var bezel = canvas.parentElement;
+  var liveRegion = document.getElementById('live-region');
+  var sizeGroup = document.getElementById('size-group');
+  var paletteEl = document.getElementById('palette');
+  var clearBtn = document.getElementById('clear-btn');
+  var copyBtn = document.getElementById('copy-btn');
+  var outputEl = document.getElementById('output');
+  var copyStatus = document.getElementById('copy-status');
+  var activeNameEl = document.getElementById('active-color-name');
+  var activeIndexEl = document.getElementById('active-color-index');
+  var sectionStatus = document.getElementById('section-status');
+  var prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ================= grid setup =================
+  function setSize(key){
+    var cfg = SIZE_CONFIGS[key];
+    gridW = cfg.w; gridH = cfg.h; cellSize = cfg.cell;
+    cells = new Uint8Array(gridW * gridH);
+    cursorR = 0; cursorC = 0;
+    canvas.width = gridW * cellSize;
+    canvas.height = gridH * cellSize;
+    canvas.setAttribute('aria-label',
+      'Pixel drawing grid, ' + cfg.label + ' cells. Use arrow keys to move, space or enter to paint, backspace to erase.');
+    draw();
+    announce('Canvas set to ' + cfg.label + '. Grid cleared.');
+  }
+
+  function cellIndex(r, c){ return r * gridW + c; }
+
+  // ================= drawing =================
+  function draw(){
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    var fineGrid = cellSize >= 6;
+
+    for (var r = 0; r < gridH; r++){
+      for (var c = 0; c < gridW; c++){
+        var v = cells[cellIndex(r, c)];
+        var x = c * cellSize, y = r * cellSize;
+        if (PALETTE[v].transparent){
+          drawChecker(x, y);
+        } else {
+          ctx.fillStyle = PALETTE[v].hex;
+          ctx.fillRect(x, y, cellSize, cellSize);
+        }
+      }
+    }
+
+    // grid lines
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+    ctx.lineWidth = 1;
+    if (fineGrid){
+      for (var gx = 0; gx <= gridW; gx++){
+        ctx.beginPath();
+        ctx.moveTo(gx * cellSize + 0.5, 0);
+        ctx.lineTo(gx * cellSize + 0.5, canvas.height);
+        ctx.stroke();
+      }
+      for (var gy = 0; gy <= gridH; gy++){
+        ctx.beginPath();
+        ctx.moveTo(0, gy * cellSize + 0.5);
+        ctx.lineTo(canvas.width, gy * cellSize + 0.5);
+        ctx.stroke();
+      }
+    }
+    // bolder line every 8 cells (tile boundary reference)
+    ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+    for (var tx = 0; tx <= gridW; tx += 8){
+      ctx.beginPath();
+      ctx.moveTo(tx * cellSize, 0);
+      ctx.lineTo(tx * cellSize, canvas.height);
+      ctx.stroke();
+    }
+    for (var ty = 0; ty <= gridH; ty += 8){
+      ctx.beginPath();
+      ctx.moveTo(0, ty * cellSize);
+      ctx.lineTo(canvas.width, ty * cellSize);
+      ctx.stroke();
+    }
+
+    drawCursor();
+  }
+
+  function drawChecker(x, y){
+    var half = cellSize / 2;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x, y, cellSize, cellSize);
+    ctx.fillStyle = '#b9b9b9';
+    ctx.fillRect(x, y, half, half);
+    ctx.fillRect(x + half, y + half, cellSize - half, cellSize - half);
+  }
+
+  function drawCursor(){
+    var x = cursorC * cellSize, y = cursorR * cellSize;
+    if (cellSize >= 8){
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = '#000000';
+      ctx.strokeRect(x + 0.5, y + 0.5, cellSize - 1, cellSize - 1);
+      ctx.strokeStyle = '#ffffff';
+      ctx.strokeRect(x + 1.5, y + 1.5, cellSize - 3, cellSize - 3);
+    } else {
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#fff609';
+      ctx.strokeRect(x, y, cellSize, cellSize);
+    }
+  }
+
+  // ================= cursor / painting =================
+  function moveCursor(dc, dr){
+    cursorC = clamp(cursorC + dc, 0, gridW - 1);
+    cursorR = clamp(cursorR + dr, 0, gridH - 1);
+    draw();
+    ensureVisible();
+    announcePosition();
+  }
+  function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
+
+  function ensureVisible(){
+    var x = cursorC * cellSize, y = cursorR * cellSize;
+    if (x < bezel.scrollLeft) bezel.scrollLeft = x;
+    else if (x + cellSize > bezel.scrollLeft + bezel.clientWidth) bezel.scrollLeft = x + cellSize - bezel.clientWidth;
+    if (y < bezel.scrollTop) bezel.scrollTop = y;
+    else if (y + cellSize > bezel.scrollTop + bezel.clientHeight) bezel.scrollTop = y + cellSize - bezel.clientHeight;
+  }
+
+  function paintCurrent(){
+    cells[cellIndex(cursorR, cursorC)] = activeColor;
+    draw();
+    announce('Painted ' + PALETTE[activeColor].name + ' at row ' + (cursorR+1) + ', column ' + (cursorC+1) + '.');
+  }
+  function eraseCurrent(){
+    cells[cellIndex(cursorR, cursorC)] = 0;
+    draw();
+    announce('Erased row ' + (cursorR+1) + ', column ' + (cursorC+1) + '.');
+  }
+
+  function announce(msg){ liveRegion.textContent = msg; }
+  function announcePosition(){
+    var v = cells[cellIndex(cursorR, cursorC)];
+    announce('Row ' + (cursorR+1) + ' of ' + gridH + ', column ' + (cursorC+1) + ' of ' + gridW + '. ' + PALETTE[v].name + '.');
+  }
+
+  canvas.addEventListener('keydown', function(e){
+    var jump = 5;
+    var handled = true;
+    switch(e.key){
+      case 'ArrowUp':    moveCursor(0, e.shiftKey ? -jump : -1); break;
+      case 'ArrowDown':  moveCursor(0, e.shiftKey ?  jump :  1); break;
+      case 'ArrowLeft':  moveCursor(e.shiftKey ? -jump : -1, 0); break;
+      case 'ArrowRight': moveCursor(e.shiftKey ?  jump :  1, 0); break;
+      case 'Home':
+        cursorC = 0;
+        if (e.ctrlKey) cursorR = 0;
+        draw(); ensureVisible(); announcePosition();
+        break;
+      case 'End':
+        cursorC = gridW - 1;
+        if (e.ctrlKey) cursorR = gridH - 1;
+        draw(); ensureVisible(); announcePosition();
+        break;
+      case ' ':
+      case 'Spacebar':
+      case 'Enter':
+        paintCurrent();
+        break;
+      case 'Backspace':
+      case 'Delete':
+        eraseCurrent();
+        break;
+      default:
+        handled = false;
+    }
+    if (handled) e.preventDefault();
+  });
+
+  // optional mouse support (click a cell to move there and paint it)
+  canvas.addEventListener('mousedown', function(e){
+    var rect = canvas.getBoundingClientRect();
+    var scaleX = canvas.width / rect.width;
+    var scaleY = canvas.height / rect.height;
+    var x = (e.clientX - rect.left) * scaleX;
+    var y = (e.clientY - rect.top) * scaleY;
+    cursorC = clamp(Math.floor(x / cellSize), 0, gridW - 1);
+    cursorR = clamp(Math.floor(y / cellSize), 0, gridH - 1);
+    paintCurrent();
+    canvas.focus();
+  });
+
+  // ================= size picker =================
+  sizeGroup.addEventListener('click', function(e){
+    var btn = e.target.closest('.choice-btn');
+    if (!btn) return;
+    Array.prototype.forEach.call(sizeGroup.querySelectorAll('.choice-btn'), function(b){
+      b.setAttribute('aria-checked', b === btn ? 'true' : 'false');
+    });
+    setSize(btn.getAttribute('data-size'));
+  });
+
+  // ================= number-key section jump =================
+  // Press 1-4 to jump focus straight to a section (and highlight it as "active").
+  var SECTIONS = [
+    { key:'1', panelId:'panel-size',   name:'Canvas size',
+      focusTarget: function(){ return sizeGroup.querySelector('[aria-checked="true"]') || sizeGroup.querySelector('.choice-btn'); } },
+    { key:'2', panelId:'panel-color',  name:'Active color',
+      focusTarget: function(){ return paletteEl.querySelector('[aria-checked="true"]') || paletteEl.querySelector('.swatch'); } },
+    { key:'3', panelId:'panel-draw',   name:'Draw',
+      focusTarget: function(){ return canvas; } },
+    { key:'4', panelId:'panel-export', name:'Export to MakeCode',
+      focusTarget: function(){ return copyBtn; } }
+  ];
+
+  function jumpToSection(section){
+    var panel = document.getElementById(section.panelId);
+    panel.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'start' });
+    var target = section.focusTarget();
+    if (target) target.focus({ preventScroll: true });
+    sectionStatus.textContent = 'Jumped to section ' + section.key + ': ' + section.name + '.';
+  }
+
+  document.addEventListener('keydown', function(e){
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    var tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    for (var i = 0; i < SECTIONS.length; i++){
+      if (SECTIONS[i].key === e.key){
+        jumpToSection(SECTIONS[i]);
+        e.preventDefault();
+        return;
+      }
+    }
+  });
+
+  // ================= color palette =================
+  function buildPalette(){
+    PALETTE.forEach(function(color, i){
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'swatch';
+      btn.setAttribute('role', 'radio');
+      btn.setAttribute('aria-checked', i === activeColor ? 'true' : 'false');
+      btn.setAttribute('aria-label', 'Color ' + i + ', ' + color.name);
+      btn.tabIndex = i === activeColor ? 0 : -1;
+      btn.dataset.index = i;
+
+      var swatch = document.createElement('span');
+      swatch.className = 'swatch-color' + (color.transparent ? ' checker' : '');
+      if (!color.transparent) swatch.style.background = color.hex;
+
+      var num = document.createElement('span');
+      num.className = 'swatch-num';
+      num.textContent = i;
+
+      btn.appendChild(swatch);
+      btn.appendChild(num);
+      paletteEl.appendChild(btn);
+    });
+  }
+
+  function selectColor(i, focusIt){
+    activeColor = i;
+    Array.prototype.forEach.call(paletteEl.querySelectorAll('.swatch'), function(b, idx){
+      var checked = idx === i;
+      b.setAttribute('aria-checked', checked ? 'true' : 'false');
+      b.tabIndex = checked ? 0 : -1;
+      if (checked && focusIt) b.focus();
+    });
+    activeNameEl.textContent = PALETTE[i].name;
+    activeIndexEl.textContent = i;
+  }
+
+  paletteEl.addEventListener('click', function(e){
+    var btn = e.target.closest('.swatch');
+    if (!btn) return;
+    selectColor(Number(btn.dataset.index), false);
+    canvas.focus();
+  });
+
+  function getPaletteColumns(){
+    // Column count adapts to the responsive layout (8 cols desktop, 4 cols narrow) —
+    // measured from actual positions rather than assumed, so keyboard nav always matches what's on screen.
+    var items = paletteEl.querySelectorAll('.swatch');
+    if (items.length < 2) return 1;
+    var firstTop = items[0].offsetTop;
+    var cols = 0;
+    for (var i = 0; i < items.length; i++){
+      if (items[i].offsetTop === firstTop) cols++;
+      else break;
+    }
+    return cols;
+  }
+
+  paletteEl.addEventListener('keydown', function(e){
+    var count = PALETTE.length;
+    var cols = getPaletteColumns();
+    var i = activeColor;
+    var next;
+    switch (e.key){
+      case 'ArrowRight': next = i + 1; break;
+      case 'ArrowLeft':  next = i - 1; break;
+      case 'ArrowDown':  next = i + cols; break;
+      case 'ArrowUp':    next = i - cols; break;
+      default: return;
+    }
+    e.preventDefault();
+    if (next >= 0 && next < count) selectColor(next, true);
+  });
+
+  // ================= clear / export =================
+  clearBtn.addEventListener('click', function(){
+    cells.fill(0);
+    draw();
+    announce('Canvas cleared.');
+  });
+
+  function generateImgLiteral(){
+    var lines = [];
+    for (var r = 0; r < gridH; r++){
+      var row = [];
+      for (var c = 0; c < gridW; c++){
+        var v = cells[cellIndex(r, c)];
+        row.push(v === 0 ? '.' : HEX_CHARS[v]);
+      }
+      lines.push('    ' + row.join(' ') + ' ');
+    }
+    return 'img`\n' + lines.join('\n') + '\n    `';
+  }
+
+  function copyViaExecCommand(){
+    try {
+      outputEl.focus();
+      outputEl.select();
+      return document.execCommand('copy');
+    } catch (err){
+      return false;
+    }
+  }
+
+  copyBtn.addEventListener('click', function(){
+    var text = generateImgLiteral();
+    outputEl.value = text;
+
+    var finish = function(ok){
+      if (ok){
+        copyStatus.textContent = 'Copied! Paste it over a sprite\'s img`...` in the MakeCode JavaScript editor.';
+      } else {
+        // Last resort only: automatic copy truly failed, so at least leave it selected.
+        outputEl.focus();
+        outputEl.select();
+        copyStatus.textContent = 'Couldn\'t copy automatically — the code below is selected, so press Ctrl+C (or Cmd+C) to copy it.';
+      }
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(
+        function(){ finish(true); },
+        function(){ finish(copyViaExecCommand()); }
+      );
+    } else {
+      finish(copyViaExecCommand());
+    }
+  });
+
+  // ================= init =================
+  buildPalette();
+  selectColor(activeColor, false);
+  setSize('s16');
+})();
+</script>
+</body>
+</html>
