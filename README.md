@@ -2,7 +2,7 @@
 
 A fully keyboard-operable pixel art editor built to make sprite and background creation in [MakeCode Arcade](https://arcade.makecode.com/) accessible to students who can't rely on a mouse.
 
-**Live demo:** `https://loretod.github.io/keyboard-sprite-editor/index.html`
+**Live demo:** [Keyboard Sprite Editor](https://loretod.github.io/keyboard-sprite-editor/)
 
 ## Why this exists
 
