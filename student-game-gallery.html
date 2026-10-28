@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<!--
+  ACCESSIBLE GAMES GALLERY — Zero Day Camp
+  =========================================
+  A single, self-contained page for GitHub Pages. It reads approved game
+  submissions from a published Google Sheet (as CSV) and renders a
+  searchable, tag-filterable gallery. No build step, no dependencies
+  beyond the Atkinson Hyperlegible web font.
+
+  SETUP (see the full walkthrough you were given separately):
+    1. Build the Google Form + Sheet + "Published" filtered tab.
+    2. File > Share > Publish to web on the "Published" tab, as CSV.
+    3. Paste that URL into CSV_URL below.
+    4. Paste your Form's URL into FORM_URL below.
+    5. Commit this file into the same repo as your Keyboard Sprite Editor.
+
+  Columns are matched by HEADER NAME, not position — so it doesn't matter
+  what order your form tool (Google Forms, Forminator, etc.) writes them
+  in, as long as your Published tab's header row contains recognizable
+  words: something with "title", "link", "desc", "tag", and one of
+  "submitter"/"class"/"student"/"name". "Tags" should be one cell with
+  values separated by commas (e.g. "One switch, Timing") — this page
+  splits that back out automatically.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Accessible Games Gallery</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --teal-deep:   #0B5D66;
+    --teal-mid:    #1C8C99;
+    --teal-tint:   #E4F3F1;
+    --orange:      #D9601A;
+    --orange-tint: #FBE7D8;
+    --paper:       #FAF7F0;
+    --ink:         #1F2421;
+    --ink-muted:   #4C5754;
+    --border:      #C9D9D6;
+    --focus-ring:  #0B5D66;
+    --radius-sm:   6px;
+    --max-width:   1080px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Atkinson Hyperlegible', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+  }
+
+  a { color: var(--teal-deep); }
+  a:hover { color: var(--orange); }
+
+  :focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .wrap {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* ---------- Masthead ---------- */
+  .masthead {
+    background: var(--teal-deep);
+    color: #fff;
+    padding: 40px 0 32px;
+  }
+  .masthead a { color: #fff; }
+  .masthead h1 {
+    font-size: clamp(1.75rem, 4vw, 2.5rem);
+    font-weight: 700;
+    margin: 0 0 10px;
+    max-width: 20ch;
+  }
+  .masthead p {
+    font-size: 1.125rem;
+    max-width: 60ch;
+    margin: 0 0 20px;
+    color: #DCEFEC;
+  }
+  .submit-link {
+    display: inline-block;
+    background: var(--orange);
+    color: #fff;
+    font-weight: 700;
+    text-decoration: none;
+    padding: 12px 20px;
+    border-radius: var(--radius-sm);
+    border: 2px solid transparent;
+  }
+  .submit-link:hover,
+  .submit-link:focus-visible { background: #B94F14; color: #fff; }
+
+  /* ---------- Controls ---------- */
+  .controls {
+    padding: 28px 0 8px;
+  }
+  .search-row label {
+    display: block;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .search-row input[type="search"] {
+    width: 100%;
+    max-width: 420px;
+    font: inherit;
+    font-size: 1rem;
+    padding: 10px 12px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: #fff;
+    color: var(--ink);
+  }
+  .search-row input[type="search"]:focus-visible {
+    border-color: var(--teal-deep);
+  }
+
+  fieldset.tag-filters {
+    border: none;
+    margin: 20px 0 4px;
+    padding: 0;
+  }
+  fieldset.tag-filters legend {
+    font-weight: 700;
+    padding: 0;
+    margin-bottom: 10px;
+  }
+  .chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+  .chip {
+    font: inherit;
+    font-weight: 700;
+    font-size: 0.9375rem;
+    padding: 8px 16px;
+    border-radius: 999px;
+    border: 2px solid var(--teal-mid);
+    background: #fff;
+    color: var(--teal-deep);
+    cursor: pointer;
+    transition: background 150ms ease, color 150ms ease;
+  }
+  .chip:hover { background: var(--teal-tint); }
+  .chip[aria-pressed="true"] {
+    background: var(--teal-deep);
+    border-color: var(--teal-deep);
+    color: #fff;
+  }
+  .clear-btn {
+    font: inherit;
+    font-size: 0.9375rem;
+    background: none;
+    border: none;
+    color: var(--ink-muted);
+    text-decoration: underline;
+    cursor: pointer;
+    padding: 8px 4px;
+  }
+  .clear-btn:disabled {
+    color: #A8B4B1;
+    text-decoration: none;
+    cursor: default;
+  }
+
+  .status-line {
+    margin: 18px 0 0;
+    color: var(--ink-muted);
+    font-size: 0.95rem;
+  }
+
+  .demo-banner {
+    margin-top: 18px;
+    background: var(--orange-tint);
+    border: 2px solid var(--orange);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    font-size: 0.95rem;
+  }
+
+  /* ---------- Gallery ---------- */
+  .gallery {
+    padding: 24px 0 60px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 22px;
+  }
+
+  .card {
+    background: #fff;
+    border: 2px solid var(--teal-mid);
+    border-radius: var(--radius-sm) var(--radius-sm) 2px 2px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .card { animation: rise 400ms ease both; }
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .card-tags {
+    background: var(--teal-tint);
+    border-bottom: 2px solid var(--teal-mid);
+    padding: 10px 14px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .tag-pill {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--teal-deep);
+    background: #fff;
+    border: 1px solid var(--teal-mid);
+    border-radius: 999px;
+    padding: 3px 10px;
+  }
+
+  .card-body {
+    padding: 16px 18px 18px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .card-body h3 {
+    font-size: 1.25rem;
+    margin: 0 0 8px;
+    line-height: 1.3;
+  }
+  .card-body p.desc {
+    margin: 0 0 16px;
+    color: var(--ink);
+    flex: 1;
+  }
+  .card-meta {
+    font-size: 0.875rem;
+    color: var(--ink-muted);
+    margin: 0 0 10px;
+  }
+  .play-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 700;
+    color: var(--orange);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .play-link:hover, .play-link:focus-visible { color: #B94F14; }
+  .play-link svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+  /* ---------- Empty / error states ---------- */
+  .empty-state {
+    grid-column: 1 / -1;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-sm);
+    padding: 40px 24px;
+    text-align: left;
+    max-width: 60ch;
+  }
+  .empty-state h2 { margin-top: 0; font-size: 1.25rem; }
+
+  footer {
+    border-top: 2px solid var(--border);
+    padding: 24px 0 40px;
+    color: var(--ink-muted);
+    font-size: 0.9375rem;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    white-space: nowrap;
+    border: 0;
+  }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <h1>Accessible Games Gallery</h1>
+    <p>Games designed and coded by students, built to be played by everyone — one switch, two switches, a joystick, or however works best for you.</p>
+    <a class="submit-link" id="submitLink" href="#">Submit your game</a>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="controls" aria-label="Search and filter games">
+    <div class="search-row">
+      <label for="searchInput">Search by title or description</label>
+      <input type="search" id="searchInput" placeholder="Try “timing” or “paddle”">
+    </div>
+
+    <fieldset class="tag-filters">
+      <legend>Filter by input method (select any that apply)</legend>
+      <div class="chip-row" id="chipRow"></div>
+    </fieldset>
+
+    <p class="status-line" id="statusLine" aria-live="polite">Loading games…</p>
+    <div id="demoBanner"></div>
+  </section>
+
+  <section class="gallery" id="gallery" aria-label="Games" aria-busy="true"></section>
+</main>
+
+<footer>
+  <div class="wrap">
+    Made something accessible in MakeCode Arcade? <a id="footerFormLink" href="#">Add it to the gallery</a>.
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  // ============================================================
+  // CONFIG — edit these two lines, then commit the file.
+  // ============================================================
+  const CSV_URL  = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR3hpCrwiiOD9OhpeH_RU5Tq-g80fOH7XabLy4WffGWIRy-OAlzNjyuXXIi0mYaP4lzxi0Kbu7w0pyt/pub?gid=755243374&single=true&output=csv";
+  const FORM_URL = "https://zeroday.camp/makecode-arcade-submission-form/";
+
+  // Known tags show in this order first; anything else found in the
+  // data is appended after, alphabetically. Edit freely to match
+  // whatever wording you used in the Form's checkbox question.
+  const PREFERRED_TAG_ORDER = [
+    "One switch", "Two switch", "Joystick", "Directional (arrow keys)",
+    "Cause and effect", "Timing-based"
+  ];
+
+  const SAMPLE_DATA = [
+    {
+      submitter: "Ms. Alvarez's class",
+      title: "Sound Catch",
+      link: "https://arcade.makecode.com/",
+      description: "A version of Catch It! where every falling star plays a different pitch, so you can play with your eyes closed.",
+      tags: ["One switch", "Cause and effect"]
+    },
+    {
+      submitter: "Room 214",
+      title: "Slow-Mo Stars",
+      link: "https://arcade.makecode.com/",
+      description: "Stars fall much slower and there's no timer, so anyone can take their time lining up the paddle.",
+      tags: ["Two switch", "Timing-based"]
+    },
+    {
+      submitter: "Devon, Grade 6",
+      title: "Big Button Bounce",
+      link: "https://arcade.makecode.com/",
+      description: "Built for a Makey Makey foot pedal — one big stomp moves the paddle all the way across the screen.",
+      tags: ["One switch"]
+    }
+  ];
+
+  // ============================================================
+  // Elements
+  // ============================================================
+  const chipRow     = document.getElementById("chipRow");
+  const gallery     = document.getElementById("gallery");
+  const statusLine  = document.getElementById("statusLine");
+  const searchInput = document.getElementById("searchInput");
+  const demoBanner  = document.getElementById("demoBanner");
+  const submitLink  = document.getElementById("submitLink");
+  const footerLink  = document.getElementById("footerFormLink");
+
+  if (FORM_URL && !FORM_URL.startsWith("PASTE_")) {
+    submitLink.href = FORM_URL;
+    footerLink.href = FORM_URL;
+  } else {
+    submitLink.href = "#";
+    footerLink.href = "#";
+  }
+
+  let allGames = [];
+  const selectedTags = new Set();
+  let searchQuery = "";
+
+  // ============================================================
+  // CSV parsing (handles quoted fields, embedded commas/newlines)
+  // ============================================================
+  function parseCSV(text) {
+    const rows = [];
+    let row = [], field = "", inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i], next = text[i + 1];
+      if (inQuotes) {
+        if (c === '"' && next === '"') { field += '"'; i++; }
+        else if (c === '"') { inQuotes = false; }
+        else { field += c; }
+      } else {
+        if (c === '"') inQuotes = true;
+        else if (c === ",") { row.push(field); field = ""; }
+        else if (c === "\r") { /* skip */ }
+        else if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
+        else { field += c; }
+      }
+    }
+    if (field.length || row.length) { row.push(field); rows.push(row); }
+    return rows.filter(r => r.some(cell => cell.trim() !== ""));
+  }
+
+  function findColumnIndex(headers, keywords) {
+    for (let i = 0; i < headers.length; i++) {
+      const h = headers[i].toLowerCase();
+      if (keywords.some(k => h.includes(k))) return i;
+    }
+    return -1;
+  }
+
+  function rowsToGames(rows) {
+    // Matches columns by header name (case-insensitive), not position —
+    // so it doesn't matter what order your form tool writes columns in,
+    // as long as the Published tab's header row uses recognizable words.
+    if (rows.length === 0) return [];
+    const headers = rows[0].map(h => h.trim());
+    const idx = {
+      submitter:   findColumnIndex(headers, ["submitter", "class", "student", "name"]),
+      title:       findColumnIndex(headers, ["title"]),
+      link:        findColumnIndex(headers, ["link", "makecode", "url"]),
+      description: findColumnIndex(headers, ["desc"]),
+      tags:        findColumnIndex(headers, ["tag"])
+    };
+    const dataRows = rows.slice(1);
+    return dataRows.map(r => ({
+      submitter: idx.submitter > -1 ? (r[idx.submitter] || "").trim() : "",
+      title: (idx.title > -1 ? (r[idx.title] || "").trim() : "") || "Untitled game",
+      link: idx.link > -1 ? (r[idx.link] || "").trim() : "",
+      description: idx.description > -1 ? (r[idx.description] || "").trim() : "",
+      tags: idx.tags > -1 ? (r[idx.tags] || "").split(",").map(t => t.trim()).filter(Boolean) : []
+    })).filter(g => g.link);
+  }
+
+  function isSafeUrl(url) {
+    try {
+      const u = new URL(url);
+      return u.protocol === "https:" || u.protocol === "http:";
+    } catch (e) { return false; }
+  }
+
+  // ============================================================
+  // Rendering
+  // ============================================================
+  function sortedTagList(games) {
+    const found = new Set();
+    games.forEach(g => g.tags.forEach(t => found.add(t)));
+    const preferred = PREFERRED_TAG_ORDER.filter(t => found.has(t));
+    const rest = [...found].filter(t => !PREFERRED_TAG_ORDER.includes(t)).sort();
+    return [...preferred, ...rest];
+  }
+
+  function renderChips(tags) {
+    chipRow.innerHTML = "";
+    tags.forEach(tag => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "chip";
+      btn.textContent = tag;
+      btn.setAttribute("aria-pressed", "false");
+      btn.addEventListener("click", () => {
+        if (selectedTags.has(tag)) selectedTags.delete(tag);
+        else selectedTags.add(tag);
+        btn.setAttribute("aria-pressed", String(selectedTags.has(tag)));
+        clearBtn.disabled = selectedTags.size === 0 && !searchQuery;
+        applyFilters();
+      });
+      chipRow.appendChild(btn);
+    });
+
+    const clearBtn = document.createElement("button");
+    clearBtn.type = "button";
+    clearBtn.className = "clear-btn";
+    clearBtn.textContent = "Clear filters";
+    clearBtn.disabled = true;
+    clearBtn.addEventListener("click", () => {
+      selectedTags.clear();
+      searchQuery = "";
+      searchInput.value = "";
+      chipRow.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", "false"));
+      clearBtn.disabled = true;
+      applyFilters();
+    });
+    chipRow.appendChild(clearBtn);
+  }
+
+  function playIcon() {
+    return '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 2.5v11l9-5.5-9-5.5Z"/></svg>';
+  }
+
+  function renderGames(games) {
+    gallery.setAttribute("aria-busy", "false");
+    gallery.innerHTML = "";
+
+    if (games.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "empty-state";
+      if (allGames.length === 0) {
+        empty.innerHTML = "<h2>This gallery is just getting started.</h2>" +
+          "<p>No games have been added yet. Be the first — build something in MakeCode Arcade and submit it below.</p>";
+      } else {
+        empty.innerHTML = "<h2>No games match those filters.</h2>" +
+          "<p>Try clearing a filter or searching a different word.</p>";
+      }
+      gallery.appendChild(empty);
+      return;
+    }
+
+    games.forEach(game => {
+      const card = document.createElement("article");
+      card.className = "card";
+
+      const tagWrap = document.createElement("div");
+      tagWrap.className = "card-tags";
+      game.tags.forEach(t => {
+        const pill = document.createElement("span");
+        pill.className = "tag-pill";
+        pill.textContent = t;
+        tagWrap.appendChild(pill);
+      });
+      if (game.tags.length === 0) tagWrap.style.display = "none";
+      card.appendChild(tagWrap);
+
+      const body = document.createElement("div");
+      body.className = "card-body";
+
+      const h3 = document.createElement("h3");
+      h3.textContent = game.title;
+      body.appendChild(h3);
+
+      if (game.submitter) {
+        const meta = document.createElement("p");
+        meta.className = "card-meta";
+        meta.textContent = "By " + game.submitter;
+        body.appendChild(meta);
+      }
+
+      const desc = document.createElement("p");
+      desc.className = "desc";
+      desc.textContent = game.description || "No description yet.";
+      body.appendChild(desc);
+
+      if (isSafeUrl(game.link)) {
+        const a = document.createElement("a");
+        a.className = "play-link";
+        a.href = game.link;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.innerHTML = playIcon() + " Play this game";
+        body.appendChild(a);
+      }
+
+      card.appendChild(body);
+      gallery.appendChild(card);
+    });
+  }
+
+  function applyFilters() {
+    let filtered = allGames;
+    if (selectedTags.size > 0) {
+      filtered = filtered.filter(g => g.tags.some(t => selectedTags.has(t)));
+    }
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(g =>
+        g.title.toLowerCase().includes(q) || g.description.toLowerCase().includes(q)
+      );
+    }
+    renderGames(filtered);
+    statusLine.textContent = allGames.length === 0
+      ? "No games yet."
+      : "Showing " + filtered.length + " of " + allGames.length + " game" + (allGames.length === 1 ? "" : "s") + ".";
+  }
+
+  let searchTimer;
+  searchInput.addEventListener("input", e => {
+    clearTimeout(searchTimer);
+    const value = e.target.value;
+    searchTimer = setTimeout(() => {
+      searchQuery = value.trim();
+      const anyChip = chipRow.querySelector(".chip[aria-pressed='true']");
+      const clearBtn = chipRow.querySelector(".clear-btn");
+      if (clearBtn) clearBtn.disabled = !searchQuery && !anyChip;
+      applyFilters();
+    }, 200);
+  });
+
+  // ============================================================
+  // Load data
+  // ============================================================
+  function startWith(games, demo) {
+    allGames = games;
+    renderChips(sortedTagList(games));
+    applyFilters();
+    if (demo) {
+      demoBanner.innerHTML = '<p class="demo-banner">You’re looking at 3 sample games. Connect your published Google Sheet — set <code>CSV_URL</code> near the top of this file — to show real submissions.</p>';
+    }
+  }
+
+  if (!CSV_URL || CSV_URL.startsWith("PASTE_")) {
+    startWith(SAMPLE_DATA, true);
+  } else {
+    fetch(CSV_URL)
+      .then(res => {
+        if (!res.ok) throw new Error("Sheet fetch failed: " + res.status);
+        return res.text();
+      })
+      .then(text => {
+        const games = rowsToGames(parseCSV(text));
+        startWith(games, false);
+      })
+      .catch(err => {
+        console.error(err);
+        statusLine.textContent = "Couldn't load the gallery right now.";
+        gallery.setAttribute("aria-busy", "false");
+        gallery.innerHTML = '<div class="empty-state"><h2>Couldn’t load the gallery.</h2>' +
+          '<p>The published sheet link may be wrong, or it isn’t published yet. Check <code>CSV_URL</code> at the top of this file, or try again in a minute.</p></div>';
+      });
+  }
+})();
+</script>
+
+</body>
+</html>
